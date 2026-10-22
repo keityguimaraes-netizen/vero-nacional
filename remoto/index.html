@@ -507,6 +507,18 @@ body{background:#E8E1E3;font-family:'Inter',sans-serif;display:flex;justify-cont
 .cv-pos{color:#1B8F3C;font-weight:700;}.cv-neg{color:#E00000;font-weight:700;}
 .cv-vazio{text-align:center;color:var(--ink-soft);padding:18px;}
 .cv-scroll{overflow-x:auto;}
+.cv-btn-an{background:var(--pink);color:#fff;border-color:var(--pink);}
+.cv-analise{background:var(--tint);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;font-family:'Inter',sans-serif;font-size:13.5px;line-height:1.55;color:var(--ink);}
+.cv-analise h4{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-soft);margin:14px 0 6px;font-weight:600;}
+.cv-analise h4:first-child{margin-top:0;}
+.cv-analise ul{margin:4px 0 0 18px;padding:0;}
+.cv-analise li{margin-bottom:5px;}
+.cv-an-tab{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:11.5px;margin:6px 0;background:#fff;}
+.cv-an-tab th{text-align:right;padding:7px 9px;color:var(--ink-soft);font-size:9.5px;text-transform:uppercase;border-bottom:1px solid var(--line);}
+.cv-an-tab td{text-align:right;padding:7px 9px;border-bottom:1px solid var(--line);white-space:nowrap;}
+.cv-an-tab th:first-child,.cv-an-tab td:first-child{text-align:left;}
+.cv-an-tab tr.tot td{font-weight:700;border-top:2px solid var(--line);}
+.cv-destaque{padding:10px 12px;border-radius:10px;background:#fff;border-left:4px solid var(--pink);margin:8px 0;}
 </style>
 <div class="cv-titulo">Conversão por vendedor — filtre por período e gestor (clique no vendedor para ver dia a dia)</div>
 <div class="cv-filtros">
@@ -515,7 +527,9 @@ body{background:#E8E1E3;font-family:'Inter',sans-serif;display:flex;justify-cont
   <label>Gestor<select id="cv-gestor"><option value="">Todos</option><option value="ANA KALINA MOREIRA CABRAL">ANA KALINA MOREIRA CABRAL</option><option value="HALLORRAINE CAROLINA LOPES">HALLORRAINE CAROLINA LOPES</option><option value="KARINE DE SOUZA SOARES">KARINE DE SOUZA SOARES</option><option value="KEITY GUIMARÃES">KEITY GUIMARÃES</option><option value="NÃO ATRIBUIDO">NÃO ATRIBUIDO</option><option value="RAFAELA MAGNI DOS SANTOS">RAFAELA MAGNI DOS SANTOS</option><option value="Sem gestor">Sem gestor</option></select></label>
   <label>Vendedor<input type="text" id="cv-busca" placeholder="buscar nome"></label>
   <button type="button" class="cv-btn" id="cv-limpar">Limpar filtros</button>
+  <button type="button" class="cv-btn cv-btn-an" id="cv-analisar">🔎 Analisar seleção</button>
 </div>
+<div id="cv-analise" class="cv-analise" style="display:none;"></div>
 <div class="cv-scroll"><table class="cv-tab">
   <thead><tr><th>Vendedor</th><th>Gestor</th><th>Demandas</th><th>Aptas</th><th>VLIQ</th><th>Conv. total</th><th>Conv. apta</th></tr></thead>
   <tbody id="cv-corpo"></tbody>
@@ -561,9 +575,67 @@ body{background:#E8E1E3;font-family:'Inter',sans-serif;display:flex;justify-cont
     var vs=document.querySelectorAll('#cv-corpo .cv-vend');
     for (var i=0;i<vs.length;i++){ vs[i].onclick=function(){var k=this.getAttribute('data-v'); abertos[k]=!abertos[k]; render();}; }
   }
+  function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function f1(v){return v.toFixed(1).replace('.',',')+'%';}
+  function analisar(){
+    var de=$('cv-de').value, ate=$('cv-ate').value, g=$('cv-gestor').value;
+    var por={};
+    D.forEach(function(r){
+      if (de && r[0]<de) return; if (ate && r[0]>ate) return; if (g && r[1]!==g) return;
+      var p=por[r[2]]||(por[r[2]]={n:r[2],g:r[1],dem:0,apt:0,vl:0}); p.dem+=r[3]; p.apt+=r[4]; p.vl+=r[5];
+    });
+    var lista=Object.keys(por).map(function(k){return por[k];}).filter(function(p){return p.dem>0;});
+    var alvo=$('cv-analise'); alvo.style.display='block';
+    var grupoTxt=(g?g:'Todos os gestores')+' · '+dd(de||'')+' a '+dd(ate||'');
+    if (lista.length<3){ alvo.innerHTML='<h4>Análise · '+esc(grupoTxt)+'</h4>Poucos vendedores com demanda na seleção ('+lista.length+'). Amplie o período ou o grupo para uma análise de outliers.'; return; }
+    var totD=0,totA=0,totV=0; lista.forEach(function(p){totD+=p.dem;totA+=p.apt;totV+=p.vl;});
+    var convG=pct(totV,totD), convAG=pct(totV,totA);
+    var minDem=Math.max(1,Math.round(totD/lista.length*0.3));
+    var elegiveis=lista.filter(function(p){return p.dem>=minDem;}).sort(function(a,b){return (a.vl/a.dem)-(b.vl/b.dem);});
+    var top=elegiveis.slice(0,5);
+    var d5=0,a5=0,v5=0; top.forEach(function(p){d5+=p.dem;a5+=p.apt;v5+=p.vl;});
+    var shD=pct(d5,totD), shV=totV>0?pct(v5,totV):0, conv5=pct(v5,d5), convA5=pct(v5,a5);
+    var restD=totD-d5, restA=totA-a5, restV=totV-v5, convR=pct(restV,restD), convAR=pct(restV,restA);
+    var dif=shD-shV;
+    var h='<h4>Análise · '+esc(grupoTxt)+'</h4>';
+    h+='<div>'+lista.length+' vendedores com demanda · <b>'+fn(totD)+'</b> demandas · <b>'+fn(totV)+'</b> vendas líquidas · conversão total do grupo <b>'+fp(convG)+'</b>'+(convAG!==null?' (apta '+fp(convAG)+')':'')+'.</div>';
+    h+='<h4>Top '+top.length+' menores conversões totais</h4>';
+    h+='<table class="cv-an-tab"><thead><tr><th>Vendedor</th><th>Demandas</th><th>% das demandas</th><th>VLIQ</th><th>% da VLIQ</th><th>Conv. total</th><th>Conv. apta</th></tr></thead><tbody>';
+    top.forEach(function(p){
+      h+='<tr><td>'+esc(p.n)+'</td><td>'+fn(p.dem)+'</td><td>'+f1(pct(p.dem,totD))+'</td><td>'+fn(p.vl)+'</td><td>'+(totV>0?f1(pct(p.vl,totV)):'—')+'</td><td>'+fp(pct(p.vl,p.dem))+'</td><td>'+fp(pct(p.vl,p.apt))+'</td></tr>';
+    });
+    h+='<tr class="tot"><td>Soma dos '+top.length+'</td><td>'+fn(d5)+'</td><td>'+f1(shD)+'</td><td>'+fn(v5)+'</td><td>'+f1(shV)+'</td><td>'+fp(conv5)+'</td><td>'+fp(convA5)+'</td></tr></tbody></table>';
+    h+='<div class="cv-destaque">Esses '+top.length+' vendedores consomem <b>'+f1(shD)+'</b> do total de demandas para trazer apenas <b>'+fn(v5)+'</b> vendas líquidas, ou <b>'+f1(shV)+'</b> do total de vendas líquidas.</div>';
+    h+='<h4>Conclusão</h4>';
+    if (dif>0.5) h+='<div>A representatividade deles nas vendas ('+f1(shV)+') é <b>menor</b> que a nas demandas ('+f1(shD)+'): diferença de '+dif.toFixed(1).replace('.',',')+' p.p. Convertem '+fp(conv5)+' contra '+fp(convR)+' dos demais, ou seja, parte das demandas desse bloco está sendo desperdiçada em relação ao que o restante da equipe entregaria.</div>';
+    else if (dif<-0.5) h+='<div>A representatividade deles nas vendas ('+f1(shV)+') é <b>maior</b> que a nas demandas ('+f1(shD)+'): não há desperdício relevante de demanda nesse bloco.</div>';
+    else h+='<div>A representatividade deles nas vendas ('+f1(shV)+') é <b>proporcional</b> à das demandas ('+f1(shD)+'): neste recorte não há concentração de demanda ineficiente.</div>';
+    var ganho=d5*convR/100-v5;
+    if (dif>0.5 && ganho>=1) h+='<div>Se esse bloco convertesse na média dos demais ('+fp(convR)+'), seriam cerca de <b>+'+fn(ganho)+'</b> vendas líquidas no período.</div>';
+    h+='<h4>Ações sugeridas de distribuição</h4><ul>';
+    if (dif>0.5){
+      var dest=lista.filter(function(p){return top.indexOf(p)<0 && p.dem>=minDem && pct(p.vl,p.dem)>=convG;}).sort(function(a,b){return (b.vl/b.dem)-(a.vl/a.dem);});
+      var realoc=Math.round(d5*0.3);
+      var dD=0,vD=0; dest.forEach(function(p){dD+=p.dem;vD+=p.vl;});
+      var convD=dD?pct(vD,dD):null;
+      var ganhoR=(convD!==null)? realoc*(convD-conv5)/100 : null;
+      h+='<li><b>Redistribuir parte da fila:</b> deslocar cerca de 30% das demandas desses '+top.length+' (≈ '+fn(realoc)+' demandas) para vendedores com conversão igual ou acima da média do grupo'+(dest.length?' (ex.: '+dest.slice(0,3).map(function(p){return esc(p.n)+' '+fp(pct(p.vl,p.dem));}).join(', ')+')':'')+'.'+(ganhoR!==null&&ganhoR>=1?' Estimativa: <b>+'+fn(ganhoR)+'</b> vendas líquidas, mantendo a conversão atual de cada lado (premissa simplificada).':'')+'</li>';
+      h+='<li><b>Teto temporário de demandas/dia</b> para esses vendedores até a conversão se aproximar da média, priorizando o encaminhamento de demandas aptas para quem converte melhor.</li>';
+      if (convA5!==null && convAG!==null && convA5<convAG-3) h+='<li><b>Abordagem:</b> a conversão apta deles ('+fp(convA5)+') também está abaixo da do grupo ('+fp(convAG)+'): indica problema na condução do atendimento. Priorizar monitoria de qualidade, escuta de ligações/atendimentos e acompanhamento (shadowing) com os vendedores de melhor conversão.</li>';
+      else h+='<li><b>Mix de demandas:</b> a conversão apta deles está próxima da do grupo'+(convA5!==null?' ('+fp(convA5)+' vs '+fp(convAG)+')':'')+', então a perda vem de muitas demandas não aptas no meio. Revisar o critério de distribuição por aptidão para que esse bloco não concentre demandas de baixa chance.</li>';
+      h+='<li><b>Acompanhamento:</b> repetir esta análise semanalmente (mesmo grupo e período) e verificar se o bloco sai do Top '+top.length+' após o ajuste.</li>';
+    } else {
+      h+='<li>Manter a distribuição atual e acompanhar semanalmente; reavaliar se algum vendedor passar a concentrar demanda acima da sua participação nas vendas.</li>';
+    }
+    h+='</ul>';
+    h+='<div style="font-size:11.5px;color:var(--ink-soft);margin-top:10px;">Critério: considera os vendedores com pelo menos '+fn(minDem)+' demandas na seleção (30% da média por vendedor, para evitar amostras muito pequenas). Conversão total = vendas líquidas ÷ demandas. Estimativas são indicativas e assumem conversão constante.</div>';
+    alvo.innerHTML=h;
+  }
+  $('cv-analisar').addEventListener('click',analisar);
+  ['cv-de','cv-ate','cv-gestor'].forEach(function(i){$(i).addEventListener('change',function(){ if($('cv-analise').style.display!=='none') analisar(); });});
   ['cv-de','cv-ate','cv-gestor'].forEach(function(i){$(i).addEventListener('change',render);});
   $('cv-busca').addEventListener('input',render);
-  $('cv-limpar').addEventListener('click',function(){$('cv-de').value='2026-10-01';$('cv-ate').value='2026-10-21';$('cv-gestor').value='';$('cv-busca').value='';abertos={};render();});
+  $('cv-limpar').addEventListener('click',function(){$('cv-de').value='2026-10-01';$('cv-ate').value='2026-10-21';$('cv-gestor').value='';$('cv-busca').value='';abertos={};$('cv-analise').style.display='none';render();});
   render();
 })();
 </script>
@@ -1942,7 +2014,7 @@ body{background:#E8E1E3;font-family:'Inter',sans-serif;display:flex;justify-cont
     </div>
     <a class="footer-download" href="../Dados_Analitico_Vendas.xlsx" download>⬇ Baixar base de dados</a>
     <div class="footer-right">
-      Gerado automaticamente em 22/10/2026 às 11:01 · dados parciais
+      Gerado automaticamente em 22/10/2026 às 11:20 · dados parciais
       <div class="footer-views">👁 <span id="contador-acessos">···</span> visualizações</div>
     </div>
   </div>
